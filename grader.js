@@ -44,10 +44,6 @@ var cheerioHtmlFile = function(htmlfile) {
     return cheerio.load(fs.readFileSync(htmlfile));
 };
 
-var cheerioStream = function(checkURL) {
-    return cheerio.load(checkURL);
-};
-
 var loadChecks = function(checksfile) {
     return JSON.parse(fs.readFileSync(checksfile));
 };
@@ -65,25 +61,19 @@ var checkHtmlFile = function(htmlfile, checksfile) {
     return out;
 };
 
-var buildfn = function(htmlfile, checksfile) {
-    var checkURLFile = function(result, response) {
-        if (result instanceof Error) {
-            console.log("No URL specified")
-            console.error('Error: ' + util.format(response.message));
-        } else {
-            $ = cheerioStream(result);
-        }
-        var checks = loadChecks(checksfile).sort();
-        var out = {};
-        for(var ii in checks) {
-           var present = $(checks[ii]).length > 0;
-           out[checks[ii]] = present;
-        }
-        console.log(JSON.stringify(out, null, 4));
+var processResults = function(urlResult, checksfile) {
 
-    };
-    return checkURLFile;
+    $ = cheerio.load(urlResult);
+
+    var checks = loadChecks(checksfile).sort();
+    var out = {};
+    for(var ii in checks) {
+        var present = $(checks[ii]).length > 0;
+        out[checks[ii]] = present;
+    }
+    console.log(JSON.stringify(out, null, 4));
 };
+
 
 var clone = function(fn) {
     // Workaround for commander.js issue.
@@ -95,7 +85,7 @@ if(require.main == module) {
     program
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
-        .option('-u, --url <url_file>')
+        .option('-u, --url <url_file>', 'Path to url')
         .parse(process.argv);
 
     if(program.url == null){
@@ -103,8 +93,15 @@ if(require.main == module) {
       console.log(JSON.stringify(checkJson, null, 4));
     }
     else{
-      var checkURLFile = buildfn(program.file, program.checks);
-      rest.get(program.url).on('complete', checkURLFile);
+
+        rest.get(program.url).on('complete', function(result) 
+	{
+	    if (result instanceof Error){
+        	util.puts("Error: " + result.message);  //util is from var util = require('util');
+    	    } else{
+            	processResults(result, program.checks);  //declares+initializes checkJson, outJson, and logs to console
+    	    }
+	});       
     }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
